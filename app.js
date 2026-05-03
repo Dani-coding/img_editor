@@ -878,7 +878,7 @@ textInput = document.createElement('input');
         ctx.font = activeTextElement.fontSize + 'px sans-serif';
         ctx.fillStyle = activeTextElement.color;
         ctx.globalAlpha = 0.7;
-        ctx.fillText(activeTextElement.text, newX, newY);
+        ctx.fillText(activeTextElement.text, newX, newY + activeTextElement.fontSize);
         ctx.restore();
     }
 
@@ -886,14 +886,18 @@ textInput = document.createElement('input');
         if (!activeTextElement) return;
 
         const newX = x - textDragOffset.x;
-        const newY = y - textDragOffset.y;
+        const newY = y - textDragOffset.y - activeTextElement.fontSize;
 
         activeTextElement.x = newX;
-        activeTextElement.y = newY;
+        activeTextElement.y = newY + activeTextElement.fontSize;
         hasChanges = true;
 
         isDraggingText = false;
-        textPreviewImageData = null;
+        
+        if (textPreviewImageData) {
+            ctx.putImageData(textPreviewImageData, 0, 0);
+            textPreviewImageData = null;
+        }
         activeTextElement = null;
 
         renderTextElements();
