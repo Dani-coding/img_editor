@@ -186,6 +186,12 @@
         canvas.addEventListener('mouseleave', handleMouseUp);
         canvas.addEventListener('dblclick', handleTextDblClick);
 
+        document.addEventListener('mousedown', function(e) {
+            if (textInput && isEditingText && !textInput.contains(e.target) && e.target !== canvas) {
+                finishTextEditing();
+            }
+        });
+
         document.addEventListener('paste', handlePaste);
         document.addEventListener('keydown', handleKeyDown);
     }
@@ -290,9 +296,26 @@
         const y = e.clientY - rect.top;
 
         if (currentTool === 'text' && hasImage) {
+            
+            if (textElements.length > 0) {
+                const textAtPos = getTextAtPosition(x, y);
+                if (textAtPos) {
+                    isDraggingText = true;
+                    activeTextElement = textAtPos;
+                    textDragOffset = { x: x - textAtPos.x, y: y - textAtPos.y };
+                    textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    return;
+                }
+            }
+            
             if (isEditingText) {
                 return;
             }
+            
+            if (textElements.length > 0) {
+                renderTextElements();
+            }
+            
             startTextInput(x, y);
             return;
         }
@@ -729,60 +752,62 @@
     }
 
 function startTextInput(x, y) {
-        console.log('START TEXT INPUT - x:', x, 'y:', y);
+        
         if (!hasImage) return;
 
-        finishTextEditing();
+finishTextEditing();
 
-const wrapper = canvas.parentElement;
+        const wrapper = canvas.parentElement;
         
-        textInput = document.createElement('input');
+        if (!textPreviewImageData) {
+            textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+        
+textInput = document.createElement('input');
         textInput.type = 'text';
         textInput.id = 'temp-text-input';
         textInput.placeholder = 'Escribe aquí...';
-        
         textInput.style.position = 'absolute';
         textInput.style.left = (canvas.offsetLeft + x) + 'px';
         textInput.style.top = (canvas.offsetTop + y) + 'px';
         textInput.style.zIndex = '999';
-        textInput.style.background = 'red';
-        
-        console.log('wrapper:', wrapper);
-        console.log('input:', textInput);
+        textInput.style.background = 'transparent';
+        textInput.style.border = '1px dashed ' + colorPicker.value;
+        textInput.style.color = colorPicker.value;
+        textInput.style.fontSize = textSizeInput.value + 'px';
         
         wrapper.appendChild(textInput);
-        
-        console.log('input appended to wrapper');
         
         setTimeout(function() {
             textInput.focus();
         }, 100);
 
         activeTextElement = {
-            x: canvas.offsetLeft + x,
-            y: canvas.offsetTop + y,
+            x: x,
+            y: y,
             text: '',
             fontSize: parseInt(textSizeInput.value),
             color: colorPicker.value
         };
 
         isEditingText = true;
-        console.log('activeTextElement coords:', activeTextElement.x, activeTextElement.y);
 
-        textInput.addEventListener('blur', function() {
-            console.log('blur event fired');
-            finishTextEditing();
+        textInput.addEventListener('blur', function(e) {
+            setTimeout(function() {
+                if (textInput && textInput.value.trim()) {
+                    finishTextEditing();
+                    canvas.style.cursor = 'text';
+                }
+            }, 100);
         });
     }
 
     function finishTextEditing() {
-        console.log('finishTextEditing called, textInput:', textInput, 'activeTextElement:', activeTextElement);
         if (textInput && textInput.value.trim()) {
             const text = textInput.value.trim();
             if (activeTextElement) {
                 activeTextElement.text = text;
                 textElements.push({ ...activeTextElement });
-                console.log('Text saved:', text);
                 hasChanges = true;
             }
             textInput.remove();
@@ -793,7 +818,12 @@ const wrapper = canvas.parentElement;
         }
         activeTextElement = null;
         isEditingText = false;
+        
         renderTextElements();
+        
+        setTimeout(function() {
+            originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }, 10);
     }
 
     function getTextAtPosition(x, y) {
@@ -829,7 +859,7 @@ const wrapper = canvas.parentElement;
         textElements.forEach(function(textEl) {
             ctx.font = textEl.fontSize + 'px sans-serif';
             ctx.fillStyle = textEl.color;
-            ctx.fillText(textEl.text, textEl.x, textEl.y);
+            ctx.fillText(textEl.text, textEl.x, textEl.y + textEl.fontSize);
         });
         ctx.restore();
     }
