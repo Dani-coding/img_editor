@@ -618,15 +618,11 @@
                     new ClipboardItem({ 'image/png': blob })
                 ]);
             })
-            .then(function() {
-                alert('Selección copiada al portapapeles');
-            })
             .catch(function(err) {
-                const link = document.createElement('a');
+                var link = document.createElement('a');
                 link.download = 'selection.png';
                 link.href = dataUrl;
                 link.click();
-                alert('No se pudo copiar al portapapeles. Se descargó en su lugar.');
             });
     }
 
@@ -636,9 +632,7 @@
         canvas.toBlob(function(blob) {
             navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': blob })
-            ]).then(function() {
-                alert('Imagen copiada al portapapeles');
-            }).catch(function(err) {
+            ]).catch(function(err) {
                 console.error('Error copying:', err);
             });
         }, 'image/png', 0.85);
@@ -659,10 +653,11 @@
         if (confirm('¿Estás seguro de que quieres limpiar el canvas?')) {
             canvas.width = 800;
             canvas.height = 600;
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = '#f3f4f6';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             hasImage = false;
             hasChanges = false;
+            originalImageData = null;
             emptyState.classList.remove('hidden');
             clearSelection();
             localStorage.removeItem('imageEditor_autosave');
