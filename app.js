@@ -217,16 +217,12 @@
         if (currentTool === 'selection' && hasImage) {
             const handle = getHandleAtPosition(x, y);
             if (handle) {
-                ctx.putImageData(originalImageData, 0, 0);
-                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 isResizingSelection = true;
                 resizeHandle = handle;
                 return;
             }
             
             if (selection && isInsideSelection(x, y)) {
-                ctx.putImageData(originalImageData, 0, 0);
-                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 isMovingSelection = true;
                 dragOffset = { x: x - selection.x, y: y - selection.y };
             } else {
