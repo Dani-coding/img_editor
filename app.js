@@ -191,8 +191,8 @@
         canvas.addEventListener('mouseleave', handleMouseUp);
         canvas.addEventListener('dblclick', handleTextDblClick);
 
-        document.addEventListener('mousedown', function(e) {
-            if (textInput && isEditingText && !textInput.contains(e.target) && e.target !== canvas) {
+        window.addEventListener('mousedown', function(e) {
+            if (textInput && isEditingText && !textInput.contains(e.target) && e.target !== canvas && !canvas.contains(e.target)) {
                 finishTextEditing();
             }
         });
@@ -762,10 +762,8 @@ function startTextInput(x, y) {
 
         textInput.addEventListener('blur', function(e) {
             setTimeout(function() {
-                if (textInput && textInput.value.trim()) {
-                    finishTextEditing();
-                    canvas.style.cursor = 'text';
-                }
+                finishTextEditing();
+                canvas.style.cursor = 'text';
             }, 100);
         });
     }
@@ -787,7 +785,7 @@ function startTextInput(x, y) {
         activeTextElement = null;
         isEditingText = false;
         
-        renderTextElements();
+        refreshCanvas();
     }
 
     function getTextAtPosition(x, y) {
@@ -840,12 +838,20 @@ function startTextInput(x, y) {
 
         ctx.drawImage(auxCanvas, 0, 0);
 
-        ctx.save();
-        ctx.font = activeTextElement.fontSize + 'px sans-serif';
-        ctx.fillStyle = activeTextElement.color;
-        ctx.globalAlpha = 0.7;
-        ctx.fillText(activeTextElement.text, newX, newY + activeTextElement.fontSize);
-        ctx.restore();
+        textElements.forEach(function(textEl) {
+            if (textEl === activeTextElement) {
+                ctx.save();
+                ctx.font = textEl.fontSize + 'px sans-serif';
+                ctx.fillStyle = textEl.color;
+                ctx.globalAlpha = 0.7;
+                ctx.fillText(textEl.text, newX, newY + textEl.fontSize);
+                ctx.restore();
+            } else {
+                ctx.font = textEl.fontSize + 'px sans-serif';
+                ctx.fillStyle = textEl.color;
+                ctx.fillText(textEl.text, textEl.x, textEl.y + textEl.fontSize);
+            }
+        });
     }
 
     function finishDragText(x, y) {
