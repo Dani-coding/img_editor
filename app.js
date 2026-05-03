@@ -31,9 +31,23 @@
 
     function init() {
         loadTheme();
+        initCanvas();
         loadAutoSave();
         setupEventListeners();
         setupAutoSave();
+    }
+
+    function initCanvas() {
+        canvas.width = 800;
+        canvas.height = 600;
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        ctx.fillStyle = theme === 'dark' ? '#27272a' : '#e5e7eb';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        hasImage = false;
+        hasChanges = false;
+        originalImageData = null;
+        emptyState.classList.remove('hidden');
+        clearSelection();
     }
 
     function loadTheme() {
@@ -48,6 +62,12 @@
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('imageEditor_theme', next);
         themeToggle.querySelector('.icon').textContent = next === 'light' ? '☀️' : '🌙';
+
+        if (!hasImage) {
+            const theme = document.documentElement.getAttribute('data-theme') || 'light';
+            ctx.fillStyle = theme === 'dark' ? '#27272a' : '#e5e7eb';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
     }
 
     function loadAutoSave() {
@@ -92,7 +112,29 @@
     }
 
     function setupEventListeners() {
+        const canvasContainer = document.querySelector('.canvas-container');
+
         themeToggle.addEventListener('click', toggleTheme);
+
+        canvasContainer.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            canvasContainer.classList.add('drag-over');
+        });
+
+        canvasContainer.addEventListener('dragleave', function(e) {
+            if (e.relatedTarget && !canvasContainer.contains(e.relatedTarget)) {
+                canvasContainer.classList.remove('drag-over');
+            }
+        });
+
+        canvasContainer.addEventListener('drop', function(e) {
+            e.preventDefault();
+            canvasContainer.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                loadImage(file);
+            }
+        });
 
         document.getElementById('btn-open').addEventListener('click', function() {
             fileInput.click();
@@ -647,19 +689,11 @@
         link.click();
     }
 
-    function clearCanvas() {
+function clearCanvas() {
         if (!hasImage) return;
 
         if (confirm('¿Estás seguro de que quieres limpiar el canvas?')) {
-            canvas.width = 800;
-            canvas.height = 600;
-            ctx.fillStyle = '#f3f4f6';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            hasImage = false;
-            hasChanges = false;
-            originalImageData = null;
-            emptyState.classList.remove('hidden');
-            clearSelection();
+            initCanvas();
             localStorage.removeItem('imageEditor_autosave');
         }
     }
