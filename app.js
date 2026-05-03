@@ -588,6 +588,8 @@
     function cropSelection() {
         if (!selection) return;
 
+        ctx.putImageData(originalImageData, 0, 0);
+        
         const imageData = ctx.getImageData(selection.x, selection.y, selection.w, selection.h);
         canvas.width = selection.w;
         canvas.height = selection.h;
@@ -601,6 +603,8 @@
     function copySelection() {
         if (!selection) return;
 
+        ctx.putImageData(originalImageData, 0, 0);
+        
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = selection.w;
         tempCanvas.height = selection.h;
@@ -609,15 +613,25 @@
         const imageData = ctx.getImageData(selection.x, selection.y, selection.w, selection.h);
         tempCtx.putImageData(imageData, 0, 0);
 
-        tempCanvas.toBlob(function(blob) {
-            navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob })
-            ]).then(function() {
+        const dataUrl = tempCanvas.toDataURL('image/png');
+        
+        fetch(dataUrl)
+            .then(function(res) { return res.blob(); })
+            .then(function(blob) {
+                return navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+            })
+            .then(function() {
                 alert('Selección copiada al portapapeles');
-            }).catch(function(err) {
-                console.error('Error copying:', err);
+            })
+            .catch(function(err) {
+                const link = document.createElement('a');
+                link.download = 'selection.png';
+                link.href = dataUrl;
+                link.click();
+                alert('No se pudo copiar al portapapeles. Se descargó en su lugar.');
             });
-        }, 'image/png');
     }
 
     function copyToClipboard() {
@@ -662,6 +676,18 @@
     function handleKeyDown(e) {
         if (e.target.tagName === 'INPUT') return;
 
+        if (e.ctrlKey && e.key.toLowerCase() === 'c' && selection) {
+            e.preventDefault();
+            copySelection();
+            return;
+        }
+
+        if (e.ctrlKey && e.key.toLowerCase() === 'x' && selection) {
+            e.preventDefault();
+            cropSelection();
+            return;
+        }
+
         switch (e.key.toLowerCase()) {
             case 'p':
                 setTool('pencil');
@@ -688,16 +714,6 @@
                     cropSelection();
                 }
                 break;
-        }
-
-        if (e.ctrlKey && e.key.toLowerCase() === 'c' && selection) {
-            e.preventDefault();
-            copySelection();
-        }
-
-        if (e.ctrlKey && e.key.toLowerCase() === 'x' && selection) {
-            e.preventDefault();
-            cropSelection();
         }
     }
 
