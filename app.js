@@ -24,6 +24,8 @@
     let dragOffset = { x: 0, y: 0 };
     let selectionStartPos = null;
     let isMovingSelection = false;
+    let isResizingSelection = false;
+    let resizeHandle = null;
 
     const MIN_SELECTION = 20;
 
@@ -213,6 +215,15 @@
         const y = e.clientY - rect.top;
 
         if (currentTool === 'selection' && hasImage) {
+            const handle = getHandleAtPosition(x, y);
+            if (handle) {
+                ctx.putImageData(originalImageData, 0, 0);
+                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                isResizingSelection = true;
+                resizeHandle = handle;
+                return;
+            }
+            
             if (selection && isInsideSelection(x, y)) {
                 ctx.putImageData(originalImageData, 0, 0);
                 originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -255,7 +266,13 @@
         const y = e.clientY - rect.top;
 
         if (currentTool === 'selection') {
-            if (isMovingSelection && selection) {
+            if (selection) {
+                updateSelectionCursor(x, y);
+            }
+            
+            if (isResizingSelection && resizeHandle) {
+                resizeSelection(resizeHandle, x, y);
+            } else if (isMovingSelection && selection) {
                 const newX = x - dragOffset.x;
                 const newY = y - dragOffset.y;
                 
@@ -295,7 +312,9 @@
             }
             isDraggingSelection = false;
             isMovingSelection = false;
+            isResizingSelection = false;
             dragHandle = null;
+            resizeHandle = null;
             return;
         }
 
@@ -466,6 +485,8 @@
     }
 
     function getHandleAtPosition(x, y) {
+        if (!selection) return null;
+        
         const handleSize = 12;
         const handles = [
             { name: 'nw', x: selection.x, y: selection.y },
