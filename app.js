@@ -6,6 +6,9 @@
     const colorPicker = document.getElementById('color-picker');
     const strokeWidth = document.getElementById('stroke-width');
     const strokeValue = document.getElementById('stroke-value');
+    const textSizeInput = document.getElementById('text-size');
+    const textSizeValue = document.getElementById('text-size-value');
+    const textSizeRow = document.getElementById('text-size-row');
     const fileInput = document.getElementById('file-input');
     const selectionActions = document.querySelector('.selection-actions');
 
@@ -20,6 +23,14 @@
 
     let selection = null;
     let isDraggingSelection = false;
+
+    let textElements = [];
+    let activeTextElement = null;
+    let textInput = null;
+    let isEditingText = false;
+    let isDraggingText = false;
+    let textDragOffset = { x: 0, y: 0 };
+    let textPreviewImageData = null;
     let dragHandle = null;
     let dragOffset = { x: 0, y: 0 };
     let selectionStartPos = null;
@@ -164,10 +175,16 @@
             hasChanges = true;
         });
 
+        textSizeInput.addEventListener('input', function() {
+            textSizeValue.textContent = this.value + 'px';
+            hasChanges = true;
+        });
+
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
         canvas.addEventListener('mouseleave', handleMouseUp);
+        canvas.addEventListener('dblclick', handleTextDblClick);
 
         document.addEventListener('paste', handlePaste);
         document.addEventListener('keydown', handleKeyDown);
@@ -179,12 +196,25 @@
             btn.classList.toggle('active', btn.dataset.tool === tool);
         });
 
+        textSizeRow.style.display = tool === 'text' ? 'flex' : 'none';
+
         if (tool === 'selection') {
             canvas.style.cursor = 'default';
             if (hasImage) {
                 originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             }
+        } else if (tool === 'text') {
+            canvas.style.cursor = 'text';
+            if (originalImageData) {
+                ctx.putImageData(originalImageData, 0, 0);
+            }
+            renderTextElements();
         } else {
+            if (originalImageData) {
+                ctx.putImageData(originalImageData, 0, 0);
+                originalImageData = null;
+            }
+            renderTextElements();
             canvas.style.cursor = 'crosshair';
             if (originalImageData) {
                 ctx.putImageData(originalImageData, 0, 0);
@@ -193,6 +223,9 @@
         }
 
         clearSelection();
+        if (tool !== 'text') {
+            finishTextEditing();
+        }
     }
 
     function handleFileSelect(e) {
@@ -256,6 +289,14 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        if (currentTool === 'text' && hasImage) {
+            if (isEditingText) {
+                return;
+            }
+            startTextInput(x, y);
+            return;
+        }
+
         if (currentTool === 'selection' && hasImage) {
             const handle = getHandleAtPosition(x, y);
             if (handle) {
@@ -303,6 +344,17 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        if (currentTool === 'text' && isDraggingText) {
+            dragText(x, y);
+            return;
+        }
+
+        if (currentTool === 'text' && !isEditingText && !isDraggingText) {
+            const textEl = getTextAtPosition(x, y);
+            canvas.style.cursor = textEl ? 'move' : 'text';
+            return;
+        }
+
         if (currentTool === 'selection') {
             if (selection) {
                 updateSelectionCursor(x, y);
@@ -341,6 +393,14 @@
     }
 
     function handleMouseUp(e) {
+        if (currentTool === 'text' && isDraggingText) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            finishDragText(x, y);
+            return;
+        }
+
         if (currentTool === 'selection') {
             if (isDraggingSelection && selectionStartPos) {
                 const rect = canvas.getBoundingClientRect();
@@ -642,7 +702,7 @@
         if (!selection) return;
 
         ctx.putImageData(originalImageData, 0, 0);
-        
+
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = selection.w;
         tempCanvas.height = selection.h;
@@ -652,7 +712,7 @@
         tempCtx.putImageData(imageData, 0, 0);
 
         const dataUrl = tempCanvas.toDataURL('image/png');
-        
+
         fetch(dataUrl)
             .then(function(res) { return res.blob(); })
             .then(function(blob) {
@@ -666,6 +726,195 @@
                 link.href = dataUrl;
                 link.click();
             });
+    }
+
+function startTextInput(x, y) {
+        console.log('START TEXT INPUT - x:', x, 'y:', y);
+        if (!hasImage) return;
+
+        finishTextEditing();
+
+const wrapper = canvas.parentElement;
+        
+        textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.id = 'temp-text-input';
+        textInput.placeholder = 'Escribe aquí...';
+        
+        textInput.style.position = 'absolute';
+        textInput.style.left = (canvas.offsetLeft + x) + 'px';
+        textInput.style.top = (canvas.offsetTop + y) + 'px';
+        textInput.style.zIndex = '999';
+        textInput.style.background = 'red';
+        
+        console.log('wrapper:', wrapper);
+        console.log('input:', textInput);
+        
+        wrapper.appendChild(textInput);
+        
+        console.log('input appended to wrapper');
+        
+        setTimeout(function() {
+            textInput.focus();
+        }, 100);
+
+        activeTextElement = {
+            x: canvas.offsetLeft + x,
+            y: canvas.offsetTop + y,
+            text: '',
+            fontSize: parseInt(textSizeInput.value),
+            color: colorPicker.value
+        };
+
+        isEditingText = true;
+        console.log('activeTextElement coords:', activeTextElement.x, activeTextElement.y);
+
+        textInput.addEventListener('blur', function() {
+            console.log('blur event fired');
+            finishTextEditing();
+        });
+    }
+
+    function finishTextEditing() {
+        console.log('finishTextEditing called, textInput:', textInput, 'activeTextElement:', activeTextElement);
+        if (textInput && textInput.value.trim()) {
+            const text = textInput.value.trim();
+            if (activeTextElement) {
+                activeTextElement.text = text;
+                textElements.push({ ...activeTextElement });
+                console.log('Text saved:', text);
+                hasChanges = true;
+            }
+            textInput.remove();
+            textInput = null;
+        } else if (textInput) {
+            textInput.remove();
+            textInput = null;
+        }
+        activeTextElement = null;
+        isEditingText = false;
+        renderTextElements();
+    }
+
+    function getTextAtPosition(x, y) {
+        for (let i = textElements.length - 1; i >= 0; i--) {
+            const textEl = textElements[i];
+            ctx.font = textEl.fontSize + 'px sans-serif';
+            const metrics = ctx.measureText(textEl.text);
+            const textWidth = metrics.width;
+            const textHeight = textEl.fontSize;
+
+            if (x >= textEl.x && x <= textEl.x + textWidth &&
+                y >= textEl.y - textHeight && y <= textEl.y) {
+                return textEl;
+            }
+        }
+        return null;
+    }
+
+    function startDragText(x, y) {
+        const textEl = getTextAtPosition(x, y);
+        if (textEl) {
+            isDraggingText = true;
+            activeTextElement = textEl;
+            textDragOffset = { x: x - textEl.x, y: y - textEl.y };
+            textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            return true;
+        }
+        return false;
+    }
+
+    function renderTextElements() {
+        ctx.save();
+        textElements.forEach(function(textEl) {
+            ctx.font = textEl.fontSize + 'px sans-serif';
+            ctx.fillStyle = textEl.color;
+            ctx.fillText(textEl.text, textEl.x, textEl.y);
+        });
+        ctx.restore();
+    }
+
+    function dragText(x, y) {
+        if (!activeTextElement) return;
+
+        const newX = x - textDragOffset.x;
+        const newY = y - textDragOffset.y;
+
+        if (textPreviewImageData) {
+            ctx.putImageData(textPreviewImageData, 0, 0);
+        }
+
+        ctx.save();
+        ctx.font = activeTextElement.fontSize + 'px sans-serif';
+        ctx.fillStyle = activeTextElement.color;
+        ctx.globalAlpha = 0.7;
+        ctx.fillText(activeTextElement.text, newX, newY);
+        ctx.restore();
+    }
+
+    function finishDragText(x, y) {
+        if (!activeTextElement) return;
+
+        const newX = x - textDragOffset.x;
+        const newY = y - textDragOffset.y;
+
+        activeTextElement.x = newX;
+        activeTextElement.y = newY;
+        hasChanges = true;
+
+        isDraggingText = false;
+        textPreviewImageData = null;
+        activeTextElement = null;
+
+        renderTextElements();
+    }
+
+    function editTextElement(textEl) {
+        finishTextEditing();
+
+        textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = textEl.text;
+        textInput.className = 'text-input';
+        textInput.style.position = 'absolute';
+        textInput.style.left = (canvas.getBoundingClientRect().left + textEl.x) + 'px';
+        textInput.style.top = (canvas.getBoundingClientRect().top + textEl.y - 10) + 'px';
+        textInput.style.fontSize = textEl.fontSize + 'px';
+        textInput.style.fontFamily = 'sans-serif';
+        textInput.style.color = textEl.color;
+        textInput.style.background = 'rgba(255,255,255,0.8)';
+        textInput.style.border = '1px dashed ' + textEl.color;
+        textInput.style.padding = '2px 5px';
+        textInput.style.minWidth = '100px';
+        textInput.style.outline = 'none';
+
+        document.body.appendChild(textInput);
+        textInput.focus();
+
+        activeTextElement = { ...textEl, originalIndex: textElements.indexOf(textEl) };
+        isEditingText = true;
+
+        textInput.addEventListener('blur', function() {
+            const text = textInput.value.trim();
+            if (text && activeTextElement) {
+                textEl.text = text;
+                hasChanges = true;
+            }
+            textInput.remove();
+            textInput = null;
+            activeTextElement = null;
+            isEditingText = false;
+            renderTextElements();
+        });
+    }
+
+    function deleteActiveText() {
+        if (textInput) {
+            textInput.remove();
+            textInput = null;
+        }
+        activeTextElement = null;
+        isEditingText = false;
     }
 
     function copyToClipboard() {
@@ -695,6 +944,17 @@ function clearCanvas() {
         if (confirm('¿Estás seguro de que quieres limpiar el canvas?')) {
             initCanvas();
             localStorage.removeItem('imageEditor_autosave');
+        }
+    }
+
+    function handleTextDblClick(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const textEl = getTextAtPosition(x, y);
+        if (textEl) {
+            editTextElement(textEl);
         }
     }
 
@@ -729,9 +989,16 @@ function clearCanvas() {
             case 's':
                 setTool('selection');
                 break;
+            case 't':
+                setTool('text');
+                break;
             case 'escape':
-                clearSelection();
-                setTool('pencil');
+                if (currentTool === 'text' && (isEditingText || activeTextElement)) {
+                    deleteActiveText();
+                } else {
+                    clearSelection();
+                    setTool('pencil');
+                }
                 break;
             case 'delete':
             case 'backspace':
