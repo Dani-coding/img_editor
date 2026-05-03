@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Editor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="toolbar">
+        <button id="theme-toggle" class="toolbar-btn" title="Cambiar tema">
+            <span class="icon">☀️</span>
+        </button>
+        <button id="btn-open" class="toolbar-btn">
+            <span class="icon">📂</span>
+            <span>Abrir</span>
+        </button>
+        <button id="btn-copy" class="toolbar-btn">
+            <span class="icon">📋</span>
+            <span>Copiar</span>
+        </button>
+        <button id="btn-download" class="toolbar-btn">
+            <span class="icon">💾</span>
+            <span>Descargar</span>
+        </button>
+        <button id="btn-clear" class="toolbar-btn">
+            <span class="icon">🗑️</span>
+            <span>Limpiar</span>
+        </button>
+        <input type="file" id="file-input" accept="image/*" hidden>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="tools-section">
+                <div class="section-label">Herramientas</div>
+                <div class="tool-buttons">
+                    <button class="tool-btn active" data-tool="pencil" title="Lápiz (P)">
+                        <span class="icon">✏️</span>
+                    </button>
+                    <button class="tool-btn" data-tool="line" title="Línea (L)">
+                        <span class="icon">⁄</span>
+                    </button>
+                    <button class="tool-btn" data-tool="rectangle" title="Rectángulo (R)">
+                        <span class="icon">⬜</span>
+                    </button>
+                    <button class="tool-btn" data-tool="circle" title="Círculo (C)">
+                        <span class="icon">⚪</span>
+                    </button>
+                    <button class="tool-btn" data-tool="selection" title="Selección (S)">
+                        <span class="icon">▢</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="selection-actions" style="display: none;">
+                <div class="section-label">Selección</div>
+                <div class="action-buttons">
+                    <button id="btn-crop" class="action-btn">Crop</button>
+                    <button id="btn-copy-selection">Copiar</button>
+                </div>
+            </div>
+
+            <div class="style-section">
+                <div class="section-label">Estilo</div>
+                <div class="style-row">
+                    <label>Color</label>
+                    <input type="color" id="color-picker" value="#000000">
+                </div>
+                <div class="style-row">
+                    <label>Grosor</label>
+                    <div class="slider-container">
+                        <input type="range" id="stroke-width" min="1" max="50" value="3">
+                        <span id="stroke-value">3px</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <canvas id="editor-canvas"></canvas>
+            </div>
+            <div id="empty-state" class="empty-state">
+                <p>Pegá una imagen (Ctrl+V) o hacé clic en "Abrir"</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
