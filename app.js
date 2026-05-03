@@ -16,10 +16,12 @@
     let isDrawing = false;
     let startX, startY;
     let initialImageData = null;
-    let originalImageData = null;
     let hasImage = false;
     let hasChanges = false;
     let autoSaveInterval;
+
+    let auxCanvas = document.createElement('canvas');
+    let auxCtx = auxCanvas.getContext('2d');
 
     let selection = null;
     let isDraggingSelection = false;
@@ -30,7 +32,6 @@
     let isEditingText = false;
     let isDraggingText = false;
     let textDragOffset = { x: 0, y: 0 };
-    let textPreviewImageData = null;
     let dragHandle = null;
     let dragOffset = { x: 0, y: 0 };
     let selectionStartPos = null;
@@ -51,12 +52,16 @@
     function initCanvas() {
         canvas.width = 800;
         canvas.height = 600;
+        auxCanvas.width = 800;
+        auxCanvas.height = 600;
         const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        ctx.fillStyle = theme === 'dark' ? '#27272a' : '#e5e7eb';
+        const bgColor = theme === 'dark' ? '#27272a' : '#e5e7eb';
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        auxCtx.fillStyle = bgColor;
+        auxCtx.fillRect(0, 0, auxCanvas.width, auxCanvas.height);
         hasImage = false;
         hasChanges = false;
-        originalImageData = null;
         emptyState.classList.remove('hidden');
         clearSelection();
     }
@@ -90,13 +95,13 @@
                 img.onload = function() {
                     canvas.width = img.width;
                     canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
+                    auxCanvas.width = img.width;
+                    auxCanvas.height = img.height;
+                    auxCtx.drawImage(img, 0, 0);
+                    ctx.drawImage(auxCanvas, 0, 0);
                     hasImage = true;
                     hasChanges = false;
                     emptyState.classList.add('hidden');
-                    if (currentTool === 'selection') {
-                        originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    }
                 };
                 img.src = data.imageData;
             } catch (e) {
@@ -206,26 +211,12 @@
 
         if (tool === 'selection') {
             canvas.style.cursor = 'default';
-            if (hasImage) {
-                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            }
         } else if (tool === 'text') {
             canvas.style.cursor = 'text';
-            if (originalImageData) {
-                ctx.putImageData(originalImageData, 0, 0);
-            }
-            renderTextElements();
+            refreshCanvas();
         } else {
-            if (originalImageData) {
-                ctx.putImageData(originalImageData, 0, 0);
-                originalImageData = null;
-            }
-            renderTextElements();
+            ctx.drawImage(auxCanvas, 0, 0);
             canvas.style.cursor = 'crosshair';
-            if (originalImageData) {
-                ctx.putImageData(originalImageData, 0, 0);
-                originalImageData = null;
-            }
         }
 
         clearSelection();
@@ -275,14 +266,14 @@
 
                 canvas.width = width;
                 canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
+                auxCanvas.width = width;
+                auxCanvas.height = height;
+                auxCtx.drawImage(img, 0, 0, width, height);
+                ctx.drawImage(auxCanvas, 0, 0);
 
                 hasImage = true;
                 hasChanges = true;
                 emptyState.classList.add('hidden');
-                if (currentTool === 'selection') {
-                    originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                }
                 clearSelection();
             };
             img.src = e.target.result;
@@ -303,7 +294,6 @@
                     isDraggingText = true;
                     activeTextElement = textAtPos;
                     textDragOffset = { x: x - textAtPos.x, y: y - textAtPos.y };
-                    textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     return;
                 }
             }
@@ -335,7 +325,6 @@
                 if (selection) {
                     clearSelection();
                 }
-                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 selectionStartPos = { x: x, y: y };
                 selection = { x: x, y: y, w: 0, h: 0 };
                 isDraggingSelection = true;
@@ -349,16 +338,16 @@
         startX = x;
         startY = y;
         if (currentTool !== 'pencil') {
-            initialImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            initialImageData = auxCtx.getImageData(0, 0, canvas.width, canvas.height);
         }
 
         if (currentTool === 'pencil') {
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.strokeStyle = colorPicker.value;
-            ctx.lineWidth = strokeWidth.value;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
+            auxCtx.beginPath();
+            auxCtx.moveTo(x, y);
+            auxCtx.strokeStyle = colorPicker.value;
+            auxCtx.lineWidth = strokeWidth.value;
+            auxCtx.lineCap = 'round';
+            auxCtx.lineJoin = 'round';
         }
     }
 
@@ -396,7 +385,7 @@
                     selection.x = newX;
                     selection.y = newY;
                     
-                    ctx.putImageData(originalImageData, 0, 0);
+                    ctx.drawImage(auxCanvas, 0, 0);
                     drawSelectionOverlay();
                 }
             } else if (isDraggingSelection && selectionStartPos) {
@@ -408,8 +397,9 @@
         if (!isDrawing || !hasImage) return;
 
         if (currentTool === 'pencil') {
-            ctx.lineTo(x, y);
-            ctx.stroke();
+            auxCtx.lineTo(x, y);
+            auxCtx.stroke();
+            refreshCanvas();
         } else {
             drawPreview(x, y);
         }
@@ -445,27 +435,28 @@
         const endX = e.clientX - rect.left;
         const endY = e.clientY - rect.top;
 
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = strokeWidth.value;
+        auxCtx.strokeStyle = colorPicker.value;
+        auxCtx.lineWidth = strokeWidth.value;
 
         switch (currentTool) {
             case 'line':
-                ctx.beginPath();
-                ctx.moveTo(startX, startY);
-                ctx.lineTo(endX, endY);
-                ctx.stroke();
+                auxCtx.beginPath();
+                auxCtx.moveTo(startX, startY);
+                auxCtx.lineTo(endX, endY);
+                auxCtx.stroke();
                 break;
             case 'rectangle':
-                ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+                auxCtx.strokeRect(startX, startY, endX - startX, endY - startY);
                 break;
             case 'circle':
                 const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-                ctx.beginPath();
-                ctx.arc(startX, startY, radius, 0, Math.PI * 2);
-                ctx.stroke();
+                auxCtx.beginPath();
+                auxCtx.arc(startX, startY, radius, 0, Math.PI * 2);
+                auxCtx.stroke();
                 break;
         }
 
+        refreshCanvas();
         isDrawing = false;
         hasChanges = true;
         initialImageData = null;
@@ -476,12 +467,7 @@
         ctx.strokeStyle = colorPicker.value;
         ctx.lineWidth = strokeWidth.value;
 
-        if (initialImageData) {
-            ctx.putImageData(initialImageData, 0, 0);
-        } else {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            ctx.putImageData(imageData, 0, 0);
-        }
+        ctx.drawImage(auxCanvas, 0, 0);
 
         switch (currentTool) {
             case 'line':
@@ -508,10 +494,6 @@
         selectionStartPos = { x: x, y: y };
         selection = { x: x, y: y, w: 0, h: 0 };
         isDraggingSelection = true;
-        
-        if (hasImage) {
-            originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        }
     }
 
     function drawSelectionPreview(endX, endY) {
@@ -522,9 +504,7 @@
         const w = Math.abs(endX - selectionStartPos.x);
         const h = Math.abs(endY - selectionStartPos.y);
 
-        if (originalImageData) {
-            ctx.putImageData(originalImageData, 0, 0);
-        }
+        ctx.drawImage(auxCanvas, 0, 0);
         
         ctx.save();
         ctx.setLineDash([5, 5]);
@@ -585,9 +565,7 @@
     function drawSelectionOverlay() {
         if (!selection) return;
 
-        if (originalImageData) {
-            ctx.putImageData(originalImageData, 0, 0);
-        }
+        ctx.drawImage(auxCanvas, 0, 0);
 
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -695,11 +673,7 @@
         selection = null;
         selectionStartPos = null;
         selectionActions.style.display = 'none';
-        if (originalImageData) {
-            ctx.putImageData(originalImageData, 0, 0);
-        } else if (hasImage) {
-            ctx.putImageData(ctx.getImageData(0, 0, canvas.width, canvas.height), 0, 0);
-        }
+        refreshCanvas();
     }
 
     function updateSelectionActions() {
@@ -709,13 +683,13 @@
     function cropSelection() {
         if (!selection) return;
 
-        ctx.putImageData(originalImageData, 0, 0);
-        
-        const imageData = ctx.getImageData(selection.x, selection.y, selection.w, selection.h);
+        const imageData = auxCtx.getImageData(selection.x, selection.y, selection.w, selection.h);
         canvas.width = selection.w;
         canvas.height = selection.h;
-        ctx.putImageData(imageData, 0, 0);
-        originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        auxCanvas.width = selection.w;
+        auxCanvas.height = selection.h;
+        auxCtx.putImageData(imageData, 0, 0);
+        ctx.drawImage(auxCanvas, 0, 0);
 
         clearSelection();
         hasChanges = true;
@@ -723,8 +697,6 @@
 
     function copySelection() {
         if (!selection) return;
-
-        ctx.putImageData(originalImageData, 0, 0);
 
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = selection.w;
@@ -755,15 +727,11 @@ function startTextInput(x, y) {
         
         if (!hasImage) return;
 
-finishTextEditing();
+        finishTextEditing();
 
         const wrapper = canvas.parentElement;
         
-        if (!textPreviewImageData) {
-            textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        }
-        
-textInput = document.createElement('input');
+        textInput = document.createElement('input');
         textInput.type = 'text';
         textInput.id = 'temp-text-input';
         textInput.placeholder = 'Escribe aquí...';
@@ -820,10 +788,6 @@ textInput = document.createElement('input');
         isEditingText = false;
         
         renderTextElements();
-        
-        setTimeout(function() {
-            originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        }, 10);
     }
 
     function getTextAtPosition(x, y) {
@@ -848,7 +812,6 @@ textInput = document.createElement('input');
             isDraggingText = true;
             activeTextElement = textEl;
             textDragOffset = { x: x - textEl.x, y: y - textEl.y };
-            textPreviewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             return true;
         }
         return false;
@@ -864,15 +827,18 @@ textInput = document.createElement('input');
         ctx.restore();
     }
 
+    function refreshCanvas() {
+        ctx.drawImage(auxCanvas, 0, 0);
+        renderTextElements();
+    }
+
     function dragText(x, y) {
         if (!activeTextElement) return;
 
         const newX = x - textDragOffset.x;
         const newY = y - textDragOffset.y;
 
-        if (textPreviewImageData) {
-            ctx.putImageData(textPreviewImageData, 0, 0);
-        }
+        ctx.drawImage(auxCanvas, 0, 0);
 
         ctx.save();
         ctx.font = activeTextElement.fontSize + 'px sans-serif';
@@ -886,21 +852,22 @@ textInput = document.createElement('input');
         if (!activeTextElement) return;
 
         const newX = x - textDragOffset.x;
-        const newY = y - textDragOffset.y - activeTextElement.fontSize;
+        const newY = y - textDragOffset.y;
 
-        activeTextElement.x = newX;
-        activeTextElement.y = newY + activeTextElement.fontSize;
+        const finalX = newX;
+        const finalY = newY;
+        const fontSize = activeTextElement.fontSize;
+        const color = activeTextElement.color;
+        const text = activeTextElement.text;
+
+        activeTextElement.x = finalX;
+        activeTextElement.y = finalY;
         hasChanges = true;
 
         isDraggingText = false;
-        
-        if (textPreviewImageData) {
-            ctx.putImageData(textPreviewImageData, 0, 0);
-            textPreviewImageData = null;
-        }
         activeTextElement = null;
 
-        renderTextElements();
+        refreshCanvas();
     }
 
     function editTextElement(textEl) {
