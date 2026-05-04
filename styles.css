@@ -170,7 +170,7 @@ body {
     font-size: 13px;
 }
 
-#color-picker {
+#color-picker, #text-bg-color {
     width: 40px;
     height: 30px;
     border: 1px solid var(--border);
@@ -178,6 +178,25 @@ body {
     cursor: pointer;
     padding: 2px;
     background: var(--surface);
+}
+
+.small-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.small-btn:hover {
+    background: var(--hover);
+    border-color: var(--primary);
 }
 
 .slider-container {

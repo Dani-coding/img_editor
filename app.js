@@ -9,6 +9,9 @@
     const textSizeInput = document.getElementById('text-size');
     const textSizeValue = document.getElementById('text-size-value');
     const textSizeRow = document.getElementById('text-size-row');
+    const textBgColor = document.getElementById('text-bg-color');
+    const textBgRow = document.getElementById('text-bg-row');
+    const textBgNone = document.getElementById('text-bg-none');
     const fileInput = document.getElementById('file-input');
     const selectionActions = document.querySelector('.selection-actions');
 
@@ -27,6 +30,7 @@
     let isDraggingSelection = false;
 
     let textElements = [];
+    let textBackgroundColor = textBgColor.value;
     let activeTextElement = null;
     let textInput = null;
     let isEditingText = false;
@@ -185,6 +189,17 @@
             hasChanges = true;
         });
 
+        textBgColor.addEventListener('input', function() {
+            textBackgroundColor = this.value;
+            hasChanges = true;
+        });
+
+        textBgNone.addEventListener('click', function() {
+            textBgColor.value = '';
+            textBackgroundColor = '';
+            hasChanges = true;
+        });
+
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
@@ -208,6 +223,7 @@
         });
 
         textSizeRow.style.display = tool === 'text' ? 'flex' : 'none';
+        textBgRow.style.display = tool === 'text' ? 'flex' : 'none';
 
         if (tool === 'selection') {
             canvas.style.cursor = 'default';
@@ -724,28 +740,38 @@
     }
 
 function startTextInput(x, y) {
-        
+
         if (!hasImage) return;
 
         finishTextEditing();
 
         const wrapper = canvas.parentElement;
-        
-        textInput = document.createElement('input');
-        textInput.type = 'text';
+
+        textInput = document.createElement('textarea');
         textInput.id = 'temp-text-input';
         textInput.placeholder = 'Escribe aquí...';
         textInput.style.position = 'absolute';
         textInput.style.left = (canvas.offsetLeft + x) + 'px';
         textInput.style.top = (canvas.offsetTop + y) + 'px';
         textInput.style.zIndex = '999';
-        textInput.style.background = 'transparent';
+        textInput.style.background = 'rgba(255,255,255,0.9)';
         textInput.style.border = '1px dashed ' + colorPicker.value;
         textInput.style.color = colorPicker.value;
         textInput.style.fontSize = textSizeInput.value + 'px';
-        
+        textInput.style.fontFamily = 'sans-serif';
+        textInput.style.padding = '5px';
+        textInput.style.minWidth = '100px';
+        textInput.style.minHeight = '30px';
+        textInput.style.resize = 'both';
+        textInput.style.overflow = 'auto';
+        textInput.style.outline = 'none';
+
+        if (textBackgroundColor) {
+            textInput.style.background = textBackgroundColor;
+        }
+
         wrapper.appendChild(textInput);
-        
+
         setTimeout(function() {
             textInput.focus();
         }, 100);
@@ -755,7 +781,8 @@ function startTextInput(x, y) {
             y: y,
             text: '',
             fontSize: parseInt(textSizeInput.value),
-            color: colorPicker.value
+            color: colorPicker.value,
+            bgColor: textBackgroundColor
         };
 
         isEditingText = true;
@@ -789,15 +816,21 @@ function startTextInput(x, y) {
     }
 
     function getTextAtPosition(x, y) {
+        var padding = 5;
         for (let i = textElements.length - 1; i >= 0; i--) {
             const textEl = textElements[i];
             ctx.font = textEl.fontSize + 'px sans-serif';
-            const metrics = ctx.measureText(textEl.text);
-            const textWidth = metrics.width;
-            const textHeight = textEl.fontSize;
+            const lines = textEl.text.split('\n');
+            let maxWidth = 0;
+            lines.forEach(function(line) {
+                const metrics = ctx.measureText(line);
+                if (metrics.width > maxWidth) maxWidth = metrics.width;
+            });
+            const textHeight = lines.length * textEl.fontSize;
+            const bgY = textEl.y - padding + (textEl.fontSize * 0.15);
 
-            if (x >= textEl.x && x <= textEl.x + textWidth &&
-                y >= textEl.y - textHeight && y <= textEl.y) {
+            if (x >= textEl.x - padding && x <= textEl.x + maxWidth + padding &&
+                y >= bgY && y <= bgY + textHeight + padding * 2) {
                 return textEl;
             }
         }
@@ -819,8 +852,25 @@ function startTextInput(x, y) {
         ctx.save();
         textElements.forEach(function(textEl) {
             ctx.font = textEl.fontSize + 'px sans-serif';
+            var lines = textEl.text.split('\n');
+
+            if (textEl.bgColor) {
+                var maxWidth = 0;
+                lines.forEach(function(line) {
+                    var metrics = ctx.measureText(line);
+                    if (metrics.width > maxWidth) maxWidth = metrics.width;
+                });
+                var textHeight = lines.length * textEl.fontSize;
+                var padding = 5;
+                var bgY = textEl.y - padding + (textEl.fontSize * 0.15);
+                ctx.fillStyle = textEl.bgColor;
+                ctx.fillRect(textEl.x - padding, bgY, maxWidth + padding * 2, textHeight + padding * 2);
+            }
+
             ctx.fillStyle = textEl.color;
-            ctx.fillText(textEl.text, textEl.x, textEl.y + textEl.fontSize);
+            lines.forEach(function(line, index) {
+                ctx.fillText(line, textEl.x, textEl.y + textEl.fontSize + (index * textEl.fontSize));
+            });
         });
         ctx.restore();
     }
@@ -839,18 +889,41 @@ function startTextInput(x, y) {
         ctx.drawImage(auxCanvas, 0, 0);
 
         textElements.forEach(function(textEl) {
-            if (textEl === activeTextElement) {
-                ctx.save();
-                ctx.font = textEl.fontSize + 'px sans-serif';
-                ctx.fillStyle = textEl.color;
-                ctx.globalAlpha = 0.7;
-                ctx.fillText(textEl.text, newX, newY + textEl.fontSize);
-                ctx.restore();
-            } else {
-                ctx.font = textEl.fontSize + 'px sans-serif';
-                ctx.fillStyle = textEl.color;
-                ctx.fillText(textEl.text, textEl.x, textEl.y + textEl.fontSize);
+            ctx.font = textEl.fontSize + 'px sans-serif';
+            var lines = textEl.text.split('\n');
+
+            if (textEl.bgColor) {
+                var maxWidth = 0;
+                lines.forEach(function(line) {
+                    var metrics = ctx.measureText(line);
+                    if (metrics.width > maxWidth) maxWidth = metrics.width;
+                });
+                var textHeight = lines.length * textEl.fontSize;
+                var padding = 5;
+
+                if (textEl === activeTextElement) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillStyle = textEl.bgColor;
+                    ctx.fillRect(newX - padding, newY - padding + (textEl.fontSize * 0.15), maxWidth + padding * 2, textHeight + padding * 2);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = textEl.bgColor;
+                    ctx.fillRect(textEl.x - padding, textEl.y - padding + (textEl.fontSize * 0.15), maxWidth + padding * 2, textHeight + padding * 2);
+                }
             }
+
+            ctx.fillStyle = textEl.color;
+            lines.forEach(function(line, index) {
+                if (textEl === activeTextElement) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillText(line, newX, newY + textEl.fontSize + (index * textEl.fontSize));
+                    ctx.restore();
+                } else {
+                    ctx.fillText(line, textEl.x, textEl.y + textEl.fontSize + (index * textEl.fontSize));
+                }
+            });
         });
     }
 
@@ -879,21 +952,30 @@ function startTextInput(x, y) {
     function editTextElement(textEl) {
         finishTextEditing();
 
-        textInput = document.createElement('input');
-        textInput.type = 'text';
+        const lines = textEl.text.split('\n').length;
+        const fontSize = textEl.fontSize;
+
+        textInput = document.createElement('textarea');
         textInput.value = textEl.text;
         textInput.className = 'text-input';
         textInput.style.position = 'absolute';
         textInput.style.left = (canvas.getBoundingClientRect().left + textEl.x) + 'px';
         textInput.style.top = (canvas.getBoundingClientRect().top + textEl.y - 10) + 'px';
-        textInput.style.fontSize = textEl.fontSize + 'px';
+        textInput.style.fontSize = fontSize + 'px';
         textInput.style.fontFamily = 'sans-serif';
         textInput.style.color = textEl.color;
-        textInput.style.background = 'rgba(255,255,255,0.8)';
+        textInput.style.background = 'rgba(255,255,255,0.9)';
         textInput.style.border = '1px dashed ' + textEl.color;
-        textInput.style.padding = '2px 5px';
+        textInput.style.padding = '5px';
         textInput.style.minWidth = '100px';
+        textInput.style.minHeight = (lines * fontSize + 10) + 'px';
+        textInput.style.resize = 'both';
+        textInput.style.overflow = 'auto';
         textInput.style.outline = 'none';
+
+        if (textEl.bgColor) {
+            textInput.style.background = textEl.bgColor;
+        }
 
         document.body.appendChild(textInput);
         textInput.focus();
@@ -966,7 +1048,7 @@ function clearCanvas() {
     }
 
     function handleKeyDown(e) {
-        if (e.target.tagName === 'INPUT') return;
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
         if (e.ctrlKey && e.key.toLowerCase() === 'c' && selection) {
             e.preventDefault();
